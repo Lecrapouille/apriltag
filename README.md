@@ -23,6 +23,8 @@ Table of Contents
     - [Increasing speed.](#increasing-speed)
     - [Increasing detection distance.](#increasing-detection-distance)
   - [Pose Estimation.](#pose-estimation)
+    - [apriltag_pose_t](#apriltag_pose_t)
+    - [Coordinate System](#coordinate-system)
 - [Debugging](#debugging)
 - [Flexible Layouts](#flexible-layouts)
 - [Support](#support)
@@ -173,7 +175,7 @@ If the border of your tag is not being detected as a quadrilateral, decrease qua
 If the border of the tag is detected then experiment with changing decode_sharpening.
 
 ## Pose Estimation.
-We provide a method for computing the pose of the tag as follows (alternately use OpenCv's Pnp solver with SOLVEPNP_IPPE_SQUARE). You will need to include the apriltag_pose.h header file and then call the estimate_tag_pose function as follows:
+We provide a method for computing the pose of the tag as follows (alternately use OpenCv's Pnp solver with SOLVEPNP_IPPE_SQUARE, see [this issue](https://github.com/AprilRobotics/apriltag/issues/122)). You will need to include the apriltag_pose.h header file and then call the estimate_tag_pose function as follows:
 
     // First create an apriltag_detection_info_t struct using your known parameters.
     apriltag_detection_info_t info;
@@ -200,8 +202,34 @@ Note: The tag size should not be measured from the outside of the tag. The tag s
 
  ![The tag size is the width of the edge between the white and black borders.](tag_size_48h12.png)
 
+### apriltag_pose_t
+The struct `apriltag_pose_t` holds the transformation matrix from the camera optical frame to the April tag frame which is a 4x4 matrix (of type double) which is a mixture of the 3x3 rotation matrix `apriltag_pose_t::R` and the translation (column vector. Unit: meter) `apriltag_pose_t::t`. Let name it `[R|t]`:
+
+```
+        | R11 R12 R13 Tx |
+[R|t] = | R21 R22 R23 Ty |
+        | R31 R32 R33 Tz |
+        |  0   0   0  1  |
+```
+
+Let name `Pt` the homogeneous tag position and `Pc` the homogeneous camera position, we have the following relation `Pt = [R|t] * Pc` which simplifies to `Pt = R * Pc + t`. To do this computation, you can use internal functions such as `matd_t *matd_multiply(const matd_t *a, const matd_t *b);` and `matd_t *matd_add(const matd_t *a, const matd_t *b);` but do not forget to call `matd_destroy()` after! Alternatively, you can convert the matrix `R` to an OpenCV matrix:
+
+```
+apriltag_pose_t pose;
+cv::Matx33d rRotMat;
+for (int row_index = 0; row_index < 3; row_index++)
+{
+    for (int col_index = 0; col_index < 3; col_index++)
+    {
+        rRotMat(row_index, col_index) = pose.R->data[3 * row_index + col_index];
+    }
+}
+```
+
 ### Coordinate System
 The coordinate system has the origin at the camera center. The z-axis points from the camera center out the camera lens. The x-axis is to the right in the image taken by the camera, and y is down. The tag's coordinate frame is centered at the center of the tag, with x-axis to the right, y-axis down, and z-axis into the tag.
+
+**Note:** The coordinate system follows the OpenCV convention with Z pointing forwards and X and Y like in the image frame.
 
 Debugging
 =========
